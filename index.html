@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>SBI MaxGain Calculator</title>
+<meta name="description" content="See how much home-loan interest you save by parking spare money in an SBI MaxGain account, compared with prepaying your regular loan.">
+<script src="https://cdn.tailwindcss.com/3.4.16"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script>
+tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] } } } };
+</script>
+<style>
+  body { font-family: 'Inter', system-ui, sans-serif; }
+  .num { font-variant-numeric: tabular-nums; }
+  /* Hide number spinners — they waste space and are fiddly on touch */
+  input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  input[type=number] { -moz-appearance: textfield; appearance: textfield; }
+  details > summary { list-style: none; } details > summary::-webkit-details-marker { display: none; }
+  details[open] .chev { transform: rotate(90deg); }
+  .thin-scroll { scrollbar-width: thin; }
+</style>
+</head>
+<body class="bg-slate-100 text-slate-800 h-[100dvh] overflow-hidden">
+<div class="h-full flex flex-col">
+
+  <!-- Top bar -->
+  <header class="shrink-0 bg-gradient-to-r from-indigo-900 to-indigo-700 text-white">
+    <div class="h-12 px-3 sm:px-4 lg:px-5 flex items-center justify-between gap-3">
+      <div class="flex items-center gap-2.5 min-w-0">
+        <span class="w-7 h-7 shrink-0 rounded-lg bg-white/15 grid place-items-center text-sm font-bold" aria-hidden="true">₹</span>
+        <h1 class="font-bold text-sm sm:text-base whitespace-nowrap">SBI MaxGain Calculator</h1>
+        <p class="hidden md:block text-xs text-indigo-200 truncate">How much interest does parking your spare money in MaxGain save?</p>
+      </div>
+      <button id="resetBtn" class="shrink-0 text-xs font-medium rounded-lg px-2.5 py-1.5 bg-white/10 hover:bg-white/20">Reset</button>
+    </div>
+  </header>
+
+  <!-- Body -->
+  <div class="flex-1 min-h-0 p-2.5 sm:p-3 lg:p-4 lg:grid lg:grid-rows-1 lg:grid-cols-[320px_minmax(0,1fr)] xl:grid-cols-[350px_minmax(0,1fr)] lg:gap-4">
+
+    <!-- Inputs -->
+    <aside id="paneInputs" class="max-lg:hidden h-full min-h-0 overflow-y-auto thin-scroll bg-white rounded-2xl ring-1 ring-slate-200 p-4 [@media(max-height:720px)]:p-3 space-y-4 [@media(max-height:720px)]:space-y-3" aria-label="Your inputs">
+      <div>
+        <h2 class="text-sm font-semibold text-slate-900">1 · Your home loan</h2>
+        <div class="mt-2 grid grid-cols-2 gap-x-3 gap-y-2.5" id="g_loan"></div>
+      </div>
+      <div class="border-t border-slate-100 pt-3.5 [@media(max-height:720px)]:pt-2.5">
+        <h2 class="text-sm font-semibold text-slate-900">2 · MaxGain offer</h2>
+        <p class="text-[11px] text-slate-500 [@media(max-height:720px)]:hidden">Usually ~0.5% higher than a regular loan — confirm with your branch.</p>
+        <div class="mt-2 grid grid-cols-2 gap-x-3 gap-y-2.5" id="g_mg"></div>
+      </div>
+      <div class="border-t border-slate-100 pt-3.5 [@media(max-height:720px)]:pt-2.5">
+        <h2 class="text-sm font-semibold text-slate-900">3 · Spare money you'll park</h2>
+        <p class="text-[11px] text-slate-500 [@media(max-height:720px)]:hidden">Kept in the MaxGain account — you can withdraw it anytime.</p>
+        <div class="mt-2 grid grid-cols-2 gap-x-3 gap-y-2.5" id="g_park"></div>
+      </div>
+      <details class="border-t border-slate-100 pt-3">
+        <summary class="cursor-pointer text-sm font-semibold text-indigo-700 flex items-center gap-1.5 select-none">
+          <span class="chev inline-block transition-transform" aria-hidden="true">▸</span> More options
+          <span class="font-normal text-[11px] text-slate-500">EMI, bonus, withdrawal, FD</span>
+        </summary>
+        <div class="mt-3 grid grid-cols-2 gap-x-3 gap-y-2.5" id="g_more"></div>
+      </details>
+    </aside>
+
+    <!-- Results -->
+    <main id="paneResults" class="h-full min-h-0 overflow-y-auto thin-scroll flex flex-col gap-2.5 lg:gap-3" aria-label="Results">
+      <div id="warn" role="alert" class="hidden shrink-0 bg-rose-50 text-rose-800 ring-1 ring-rose-200 rounded-xl px-3 py-2 text-xs sm:text-sm"></div>
+
+      <div id="resultsBody" class="flex-1 min-h-0 flex flex-col gap-2.5 lg:gap-3 transition-opacity">
+
+        <!-- Verdict -->
+        <section class="shrink-0 bg-white rounded-2xl ring-1 ring-slate-200 p-3.5 sm:p-4 [@media(max-height:720px)]:p-3">
+          <div class="grid md:grid-cols-[minmax(0,1fr)_auto] gap-3 md:gap-5 items-center">
+            <div class="min-w-0">
+              <p id="heroLabel" class="text-xs font-medium text-slate-500">You save with MaxGain</p>
+              <p id="heroSaved" class="text-3xl xl:text-4xl [@media(max-height:720px)]:text-[1.7rem] font-extrabold num leading-tight text-emerald-600">—</p>
+              <p id="heroSub" class="text-xs sm:text-sm text-slate-600 mt-1 leading-snug"></p>
+            </div>
+            <div class="grid grid-cols-3 gap-2">
+              <div class="rounded-xl bg-slate-50 px-3 py-2 min-w-0">
+                <p class="text-[11px] text-slate-500">Loan-free by</p>
+                <p id="mFree" class="text-sm sm:text-base font-bold num truncate">—</p>
+                <p id="mFreeSub" class="text-[11px] text-slate-500 truncate"></p>
+              </div>
+              <div class="rounded-xl bg-slate-50 px-3 py-2 min-w-0">
+                <p id="mCutLabel" class="text-[11px] text-slate-500">Finish early by</p>
+                <p id="mCut" class="text-sm sm:text-base font-bold num truncate">—</p>
+                <p class="text-[11px] text-slate-500 truncate">vs today's loan</p>
+              </div>
+              <div class="rounded-xl bg-slate-50 px-3 py-2 min-w-0">
+                <p class="text-[11px] text-slate-500">EMI</p>
+                <p id="mEmi" class="text-sm sm:text-base font-bold num truncate">—</p>
+                <p class="text-[11px] text-slate-500 truncate">no change</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Three choices (desktop; on phones it is a tab) -->
+        <section class="max-lg:hidden shrink-0 bg-white rounded-2xl ring-1 ring-slate-200 p-4 [@media(max-height:720px)]:p-3">
+          <div class="flex flex-wrap items-baseline justify-between gap-x-3">
+            <h2 class="text-sm font-semibold text-slate-900">Same spare money, 3 choices</h2>
+            <p class="text-[11px] text-slate-500">Total interest you'll pay · ✓ = lowest</p>
+          </div>
+          <div class="grid grid-cols-3 gap-2 sm:gap-3 mt-2.5" id="scenarios"></div>
+        </section>
+
+        <!-- Details (tabs) -->
+        <section class="flex-1 min-h-[260px] [@media(max-height:720px)]:min-h-[190px] bg-white rounded-2xl ring-1 ring-slate-200 p-3.5 sm:p-4 [@media(max-height:720px)]:p-3 flex flex-col">
+          <div class="shrink-0 flex flex-wrap items-center justify-between gap-2">
+            <div class="inline-flex bg-slate-100 rounded-lg p-0.5 text-xs font-medium" role="tablist">
+              <button role="tab" data-tab="compare" class="tabBtn lg:hidden px-2.5 sm:px-3 py-1.5 rounded-md">3 choices</button>
+              <button role="tab" data-tab="chart" class="tabBtn px-2.5 sm:px-3 py-1.5 rounded-md">Chart</button>
+              <button role="tab" data-tab="table" class="tabBtn px-2.5 sm:px-3 py-1.5 rounded-md">Year by year</button>
+              <button role="tab" data-tab="worth" class="tabBtn px-2.5 sm:px-3 py-1.5 rounded-md">Worth it?</button>
+            </div>
+            <div data-legend="chart" class="flex gap-3 text-[11px] text-slate-600">
+              <span class="flex items-center gap-1"><span class="w-3 h-0.5 bg-slate-400 inline-block"></span>Today's loan</span>
+              <span class="flex items-center gap-1"><span class="w-3 h-0.5 bg-indigo-600 inline-block"></span>MaxGain loan</span>
+              <span class="flex items-center gap-1"><span class="w-3 h-0.5 bg-emerald-500 inline-block"></span>Money parked</span>
+            </div>
+          </div>
+
+          <div class="flex-1 min-h-0 mt-2.5 relative">
+            <div data-pane="compare" class="absolute inset-0 overflow-auto thin-scroll hidden">
+              <div class="grid grid-cols-3 gap-2" id="scenariosTab"></div>
+              <p class="text-[11px] text-slate-500 mt-2 leading-snug">Total interest you'll pay. ✓ = lowest. Prepaying and MaxGain both cut interest — but prepaid money is gone for good, while money parked in MaxGain can be withdrawn anytime.</p>
+            </div>
+
+            <div data-pane="chart" class="absolute inset-0 flex flex-col">
+              <div class="relative flex-1 min-h-0"><canvas id="chart" aria-label="Loan balance over time chart" role="img"></canvas></div>
+              <p class="shrink-0 text-[11px] text-slate-500 mt-1.5">Where the green line meets the blue line, your parked money can close the loan.</p>
+            </div>
+
+            <div data-pane="table" class="absolute inset-0 overflow-auto thin-scroll hidden">
+              <table class="w-full text-xs sm:text-sm num">
+                <thead>
+                  <tr class="text-left text-[10px] sm:text-[11px] uppercase tracking-wide text-slate-500">
+                    <th class="sticky top-0 bg-white py-1.5 pr-2">Year</th>
+                    <th class="sticky top-0 bg-white py-1.5 pr-2 text-right">Loan</th>
+                    <th class="sticky top-0 bg-white py-1.5 pr-2 text-right">Parked</th>
+                    <th class="sticky top-0 bg-white py-1.5 pr-2 text-right">Interest<span class="hidden sm:inline"> (MaxGain)</span></th>
+                    <th class="sticky top-0 bg-white py-1.5 text-right">Interest<span class="hidden sm:inline"> (today's loan)</span><span class="sm:hidden"> (now)</span></th>
+                  </tr>
+                </thead>
+                <tbody id="yearRows"></tbody>
+              </table>
+            </div>
+
+            <div data-pane="worth" class="absolute inset-0 overflow-auto thin-scroll hidden">
+              <div class="grid md:grid-cols-2 gap-3 text-xs sm:text-sm text-slate-600">
+                <div class="rounded-xl bg-slate-50 p-3 space-y-1.5">
+                  <h3 class="font-semibold text-slate-900">Is the higher rate worth it?</h3>
+                  <div id="breakEven" class="space-y-1.5"></div>
+                </div>
+                <div class="rounded-xl bg-slate-50 p-3 space-y-1.5">
+                  <h3 class="font-semibold text-slate-900">MaxGain vs a fixed deposit</h3>
+                  <div id="fdBox" class="space-y-1.5"></div>
+                </div>
+              </div>
+              <p id="leftNote" class="text-xs text-slate-600 mt-3"></p>
+              <p class="text-[11px] text-slate-400 leading-relaxed mt-2">Estimates only. Interest is modelled monthly on (loan − parked money); SBI calculates it daily, so real figures differ slightly. Rates are floating and change with the repo rate. Confirm your MaxGain rate, switch fee and drawing-power schedule with your SBI branch. Not financial advice.</p>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <!-- Mobile / tablet switcher -->
+  <nav class="lg:hidden shrink-0 bg-white border-t border-slate-200 px-3 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] flex items-center gap-3" aria-label="Switch view">
+    <div class="flex-1 min-w-0">
+      <p id="navLabel" class="text-[11px] text-slate-500 leading-tight truncate">You save</p>
+      <p id="navSaved" class="font-bold num leading-tight truncate text-emerald-600">—</p>
+    </div>
+    <div class="flex bg-slate-100 rounded-xl p-1 text-sm font-medium">
+      <button data-view="inputs" class="viewBtn px-3.5 py-1.5 rounded-lg">✏️ Inputs</button>
+      <button data-view="results" class="viewBtn px-3.5 py-1.5 rounded-lg">📊 Results</button>
+    </div>
+  </nav>
+</div>
+
+<script>
+const DEFAULTS = {
+  principal: 6462000, rate: 7.55, months: 277, emi: 0,
+  mgRate: 8.05, fee: 5900,
+  initDep: 500000, monthlyDep: 25000, stepUp: 0, lumpSum: 0, lumpMonth: 3,
+  wdAmt: 0, wdMonth: 12,
+  fdRate: 6.5, taxSlab: 30
+};
+
+// [key, label, unit, step, inputGroup, showsRupeeHint]
+const FIELDS = [
+  ['principal', 'Loan outstanding', '₹', 10000, 'g_loan', true, 'full'],
+  ['rate', 'Interest rate', '%', 0.05, 'g_loan'],
+  ['months', 'Months left', 'mo', 1, 'g_loan'],
+  ['mgRate', 'MaxGain rate', '%', 0.05, 'g_mg'],
+  ['fee', 'Switch fee', '₹', 100, 'g_mg', true],
+  ['initDep', 'Park now', '₹', 10000, 'g_park', true],
+  ['monthlyDep', 'Park every month', '₹', 1000, 'g_park', true],
+  ['emi', 'EMI (0 = auto)', '₹', 100, 'g_more', true],
+  ['stepUp', 'Monthly amount grows', '%/yr', 1, 'g_more'],
+  ['lumpSum', 'Yearly bonus parked', '₹', 10000, 'g_more', true],
+  ['lumpMonth', 'Bonus month', '1–12', 1, 'g_more'],
+  ['wdAmt', 'Take out (once)', '₹', 10000, 'g_more', true],
+  ['wdMonth', 'Take out in month', '#', 1, 'g_more'],
+  ['fdRate', 'FD rate', '%', 0.05, 'g_more'],
+  ['taxSlab', 'Tax slab', '%', 1, 'g_more']
+];
+
+const $ = id => document.getElementById(id);
+let state = { ...DEFAULTS };
+try { const s = JSON.parse(localStorage.getItem('maxgain-calc') || 'null'); if (s) state = { ...DEFAULTS, ...s }; } catch (e) {}
+const isDesktop = () => window.matchMedia('(min-width: 1024px)').matches;
+let ui = { view: 'results', tab: isDesktop() ? 'chart' : 'compare' };
+try { ui = { ...ui, ...JSON.parse(localStorage.getItem('maxgain-ui') || '{}') }; } catch (e) {}
+const saveUi = () => { try { localStorage.setItem('maxgain-ui', JSON.stringify(ui)); } catch (e) {} };
+
+function renderFields() {
+  ['g_loan', 'g_mg', 'g_park', 'g_more'].forEach(g => $(g).innerHTML = '');
+  for (const [k, label, unit, step, group, hint, width] of FIELDS) {
+    $(group).insertAdjacentHTML('beforeend', `
+      <label class="block min-w-0 ${width === 'full' ? 'col-span-2' : ''}">
+        <span class="flex items-baseline justify-between gap-1 text-xs font-medium text-slate-600">
+          <span class="truncate">${label}</span>
+          ${hint ? `<span id="w_${k}" class="shrink-0 text-[11px] text-indigo-600 font-semibold num"></span>` : ''}
+        </span>
+        <div class="mt-1 flex h-9 rounded-lg ring-1 ring-slate-300 focus-within:ring-2 focus-within:ring-indigo-500 bg-white overflow-hidden">
+          <input id="f_${k}" data-k="${k}" type="number" inputmode="decimal" step="${step}" min="0" value="${state[k]}"
+            class="w-full min-w-0 px-2.5 text-sm num outline-none bg-transparent">
+          <span class="px-2 grid place-items-center text-[11px] text-slate-500 bg-slate-50 border-l border-slate-200 whitespace-nowrap">${unit}</span>
+        </div>
+      </label>`);
+  }
+  document.querySelectorAll('input[data-k]').forEach(inp => inp.addEventListener('input', e => {
+    state[e.target.dataset.k] = parseFloat(e.target.value) || 0;
+    try { localStorage.setItem('maxgain-calc', JSON.stringify(state)); } catch (err) {}
+    calc();
+  }));
+}
+
+const inr = v => '₹' + Math.round(v).toLocaleString('en-IN');
+const short = v => {
+  const a = Math.abs(v), s = v < 0 ? '−' : '';
+  if (a >= 1e7) return s + '₹' + (a / 1e7).toFixed(2) + ' Cr';
+  if (a >= 1e5) return s + '₹' + (a / 1e5).toFixed(2) + ' L';
+  return s + '₹' + Math.round(a).toLocaleString('en-IN');
+};
+const yrsMo = m => { const y = Math.floor(m / 12), r = m % 12; return (y ? y + 'y ' : '') + r + 'm'; };
+const monthLabel = m => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() + m); return d.toLocaleString('en-IN', { month: 'short', year: 'numeric' }); };
+
+function calcEmi(P, r, n) { const i = r / 1200; if (!i) return P / n; return P * i * Math.pow(1 + i, n) / (Math.pow(1 + i, n) - 1); }
+
+// mode: 'base' (no extra), 'prepay' (extra money reduces principal), 'maxgain' (extra parked, offsets interest)
+function simulate(mode, rate, emi, s) {
+  let P = s.principal, S = 0, totInt = 0, m = 0;
+  const i = rate / 1200, rows = [], series = [];
+  let yrInt = 0, stuck = false;
+  const depositFor = mo => {
+    if (mode === 'base') return 0;
+    const yr = Math.floor(mo / 12);
+    let d = s.monthlyDep * Math.pow(1 + s.stepUp / 100, yr);
+    if (mo === 0) d += s.initDep;
+    if (s.lumpSum && (mo % 12) === (Math.max(1, Math.min(12, s.lumpMonth)) - 1)) d += s.lumpSum;
+    return d;
+  };
+  series.push({ m: 0, P, S: 0 });
+  while (m < 600) {
+    let dep = depositFor(m);
+    if (mode === 'maxgain') {
+      S += dep;
+      if (s.wdAmt && m === Math.max(1, s.wdMonth) - 1) S = Math.max(0, S - s.wdAmt);
+      if (P <= S) break;                       // parked money can close the loan
+    } else if (mode === 'prepay') {
+      P -= dep;
+      if (P <= 0) { P = 0; break; }
+    }
+    const it = Math.max(0, P - (mode === 'maxgain' ? S : 0)) * i;
+    if (emi <= it && mode !== 'maxgain') { stuck = true; break; }
+    totInt += it; yrInt += it;
+    const pay = Math.min(emi, P + it);
+    P = P + it - pay;
+    m++;
+    if (m % 12 === 0 || P <= 0.5 || (mode === 'maxgain' && P <= S)) {
+      rows.push({ yr: Math.ceil(m / 12), P: Math.max(0, P), S, int: yrInt });
+      yrInt = 0;
+    }
+    series.push({ m, P: Math.max(0, P), S });
+    if (P <= 0.5) { P = 0; break; }
+    if (mode === 'maxgain' && emi <= it && S === 0) { stuck = true; break; }
+  }
+  if (m >= 600) stuck = true;                  // never closes within 50 years — result is meaningless
+  return { totInt, months: m, rows, series, leftover: mode === 'maxgain' ? Math.max(0, S - P) : 0, closeP: P, stuck };
+}
+
+const LABELS = Object.fromEntries(FIELDS.map(([k, label]) => [k, label]));
+
+// Pure input check: returns [[fieldKey, message], ...]. Any entry blocks the calculation.
+function validate(s) {
+  const issues = [];
+  for (const k of Object.keys(DEFAULTS)) {
+    if (!Number.isFinite(s[k]) || s[k] < 0) issues.push([k, `${LABELS[k]} can't be negative.`]);
+  }
+  if (issues.length) return issues;
+  if (s.principal <= 0) issues.push(['principal', 'Loan outstanding must be more than ₹0.']);
+  if (s.rate <= 0) issues.push(['rate', 'Interest rate must be more than 0%.']);
+  if (s.months < 1 || !Number.isInteger(s.months)) issues.push(['months', 'Months left must be a whole number, at least 1.']);
+  if (s.mgRate <= 0) issues.push(['mgRate', 'MaxGain rate must be more than 0%.']);
+  if (s.lumpSum > 0 && (s.lumpMonth < 1 || s.lumpMonth > 12 || !Number.isInteger(s.lumpMonth))) issues.push(['lumpMonth', 'Bonus month must be a whole number from 1 to 12.']);
+  if (s.wdAmt > 0 && (s.wdMonth < 1 || !Number.isInteger(s.wdMonth))) issues.push(['wdMonth', 'Take-out month must be a whole number, at least 1.']);
+  if (s.taxSlab > 100) issues.push(['taxSlab', 'Tax slab can\'t be above 100%.']);
+  return issues;
+}
+
+// ---------- UI helpers ----------
+const HERO_CLS = 'text-3xl xl:text-4xl [@media(max-height:720px)]:text-[1.7rem] font-extrabold num leading-tight ';
+
+function showWarnings(list) {
+  const warn = $('warn');
+  if (!list.length) { warn.classList.add('hidden'); warn.innerHTML = ''; return; }
+  warn.innerHTML = `<p class="font-semibold">⚠️ ${list.length > 1 ? 'Please fix these:' : 'Please check this:'}</p><ul class="list-disc pl-5 mt-0.5 space-y-0.5">${list.map(t => `<li>${t}</li>`).join('')}</ul>`;
+  warn.classList.remove('hidden');
+}
+
+function setResultsBlocked(blocked, why = 'Fix the highlighted inputs to see results.') {
+  $('resultsBody').classList.toggle('opacity-30', blocked);
+  $('resultsBody').classList.toggle('pointer-events-none', blocked);
+  $('resultsBody').setAttribute('aria-hidden', blocked ? 'true' : 'false');
+  if (blocked) {
+    ['heroSaved', 'mFree', 'mCut', 'mEmi', 'navSaved'].forEach(id => $(id).textContent = '—');
+    $('heroSaved').className = HERO_CLS + 'text-slate-400';
+    $('navSaved').className = 'font-bold num leading-tight truncate text-slate-400';
+    $('heroSub').textContent = why;
+    $('mFreeSub').textContent = '';
+  }
+}
+
+function setView(v) {
+  ui.view = v; saveUi();
+  $('paneInputs').classList.toggle('max-lg:hidden', v !== 'inputs');
+  $('paneResults').classList.toggle('max-lg:hidden', v !== 'results');
+  document.querySelectorAll('.viewBtn').forEach(b => {
+    const on = b.dataset.view === v;
+    b.classList.toggle('bg-white', on); b.classList.toggle('shadow-sm', on); b.classList.toggle('text-indigo-700', on);
+    b.classList.toggle('text-slate-600', !on);
+    b.setAttribute('aria-pressed', on);
+  });
+  if (v === 'results' && chart) chart.resize();
+}
+
+function setTab(t) {
+  if (t === 'compare' && isDesktop()) t = 'chart';   // desktop shows the 3 choices above the tabs
+  ui.tab = t; saveUi();
+  document.querySelectorAll('[data-pane]').forEach(p => p.classList.toggle('hidden', p.dataset.pane !== t));
+  document.querySelectorAll('[data-legend]').forEach(p => p.classList.toggle('hidden', p.dataset.legend !== t));
+  document.querySelectorAll('.tabBtn').forEach(b => {
+    const on = b.dataset.tab === t;
+    b.classList.toggle('bg-white', on); b.classList.toggle('shadow-sm', on); b.classList.toggle('text-indigo-700', on);
+    b.classList.toggle('text-slate-600', !on);
+    b.setAttribute('aria-selected', on);
+  });
+  if (t === 'chart' && chart) chart.resize();
+}
+
+// ---------- Main render ----------
+let chart;
+function calc() {
+  const s = state;
+
+  const issues = validate(s);
+  document.querySelectorAll('input[data-k]').forEach(inp => {
+    const bad = issues.some(([k]) => k === inp.dataset.k);
+    inp.setAttribute('aria-invalid', bad ? 'true' : 'false');
+    inp.parentElement.classList.toggle('ring-rose-400', bad);
+    inp.parentElement.classList.toggle('ring-slate-300', !bad);
+  });
+  // Open "More options" if a hidden field has a problem
+  if (issues.some(([k]) => FIELDS.find(f => f[0] === k)?.[4] === 'g_more')) $('g_more').closest('details').open = true;
+
+  ['principal','initDep','monthlyDep','lumpSum','wdAmt','fee'].forEach(k => { const el = $('w_' + k); if (el) el.textContent = s[k] > 0 ? short(s[k]) : ''; });
+  if (issues.length) { $('w_emi').textContent = s.emi > 0 ? short(s.emi) : ''; showWarnings(issues.map(([, msg]) => msg)); setResultsBlocked(true); return; }
+
+  const emi = s.emi > 0 ? s.emi : calcEmi(s.principal, s.rate, s.months);
+  $('w_emi').textContent = s.emi > 0 ? short(s.emi) : 'auto ' + inr(emi);
+
+  const base = simulate('base', s.rate, emi, s);
+  const pre = simulate('prepay', s.rate, emi, s);
+  const mg = simulate('maxgain', s.mgRate, emi, s);
+
+  if (base.stuck) {
+    showWarnings([`Your EMI of ${inr(emi)} doesn't cover the monthly interest of ${inr(s.principal * s.rate / 1200)} on the current loan — check the EMI and rate.`]);
+    setResultsBlocked(true, 'Your EMI is too low to repay this loan.'); return;
+  }
+  if (mg.stuck) {
+    showWarnings([`At the MaxGain rate of ${s.mgRate}%, your EMI of ${inr(emi)} doesn't cover the monthly interest (${inr(s.principal * s.mgRate / 1200)}), so the loan would never close. SBI would raise the EMI or extend the tenure — park more money or enter a higher EMI.`]);
+    setResultsBlocked(true, 'At this MaxGain rate the loan never closes.'); return;
+  }
+  showWarnings([]);
+  setResultsBlocked(false);
+
+  // Verdict
+  const saved = base.totInt - mg.totInt - s.fee;
+  $('heroLabel').textContent = saved >= 0 ? 'You save with MaxGain' : 'MaxGain costs you extra';
+  $('heroSaved').textContent = short(Math.abs(saved));
+  $('heroSaved').title = inr(Math.abs(saved));
+  $('heroSaved').className = HERO_CLS + (saved >= 0 ? 'text-emerald-600' : 'text-rose-600');
+  $('navLabel').textContent = saved >= 0 ? 'You save' : 'MaxGain costs you extra';
+  $('navSaved').textContent = (saved < 0 ? '−' : '') + short(Math.abs(saved));
+  $('navSaved').className = 'font-bold num leading-tight truncate ' + (saved >= 0 ? 'text-emerald-600' : 'text-rose-600');
+
+  const park = [];
+  if (s.initDep > 0) park.push(`${short(s.initDep)} now`);
+  if (s.monthlyDep > 0) park.push(`${short(s.monthlyDep)}/month${s.stepUp > 0 ? ` (growing ${s.stepUp}%/yr)` : ''}`);
+  if (s.lumpSum > 0) park.push(`${short(s.lumpSum)} bonus every year`);
+  const vsPrepay = pre.totInt - (mg.totInt + s.fee);   // >0: MaxGain cheaper than prepaying
+  $('heroSub').innerHTML = (park.length
+      ? `Parking ${park.join(' + ')} cuts your total interest from <b class="text-slate-800">${short(base.totInt)}</b> to <b class="text-slate-800">${short(mg.totInt)}</b>${s.fee ? ` (+ ${inr(s.fee)} switch fee)` : ''}. `
+      : `You haven't parked any money, so MaxGain only adds its higher rate. `)
+    + '<span class="max-sm:hidden">' + (!park.length ? '' : Math.abs(vsPrepay) < 1000 ? 'Prepaying the loan instead costs about the same.'
+      : vsPrepay < 0 ? `Prepaying the loan instead saves <b class="text-amber-700">${short(-vsPrepay)} more</b> — that's the price of being able to withdraw.`
+      : `That's <b class="text-emerald-700">${short(vsPrepay)} better</b> than prepaying, and your money stays withdrawable.`) + '</span>';
+
+  $('mFree').textContent = monthLabel(mg.months);
+  $('mFreeSub').textContent = 'in ' + yrsMo(mg.months);
+  const cut = base.months - mg.months;
+  $('mCutLabel').textContent = cut >= 0 ? 'Finish early by' : 'Finish later by';
+  $('mCut').textContent = yrsMo(Math.abs(cut));
+  $('mEmi').textContent = inr(emi);
+
+  // Three choices
+  const sc = [
+    { t: "Keep today's loan", tag: 'Do nothing', int: base.totInt, mo: base.months, c: 'slate' },
+    { t: 'Prepay the loan', tag: 'Money locked', int: pre.totInt, mo: pre.months, c: 'amber' },
+    { t: 'Switch to MaxGain', tag: 'Withdrawable', int: mg.totInt + s.fee, mo: mg.months, c: 'indigo' }
+  ];
+  const best = Math.min(...sc.map(x => x.int));
+  const STY = {
+    slate: ['ring-slate-200 bg-slate-50', 'text-slate-500'],
+    amber: ['ring-amber-200 bg-amber-50/60', 'text-amber-700'],
+    indigo: ['ring-indigo-300 bg-indigo-50/60', 'text-indigo-700']
+  };
+  const scHtml = sc.map(x => {
+    const isBest = x.int === best;
+    return `<div class="rounded-xl ring-1 ${STY[x.c][0]} px-2.5 py-2 sm:px-3 sm:py-2.5 min-w-0">
+      <p class="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide leading-tight ${STY[x.c][1]}">${x.tag}</p>
+      <p class="text-xs sm:text-sm font-semibold text-slate-900 leading-tight">${x.t}</p>
+      <p class="text-base sm:text-xl font-bold num mt-1 ${isBest ? 'text-emerald-600' : 'text-slate-900'}">${short(x.int)}${isBest ? ' <span class="text-xs align-middle">✓</span>' : ''}</p>
+      <p class="text-[10px] sm:text-[11px] text-slate-500">Loan-free in <b class="text-slate-700">${yrsMo(x.mo)}</b></p>
+    </div>`;
+  }).join('');
+  $('scenarios').innerHTML = scHtml;
+  $('scenariosTab').innerHTML = scHtml;
+
+  // Is it worth it?
+  const prem = s.mgRate - s.rate;
+  const premCost = s.principal * prem / 100;
+  const beSurplus = prem > 0 ? premCost / (s.mgRate / 100) : 0;
+  $('breakEven').innerHTML = prem > 0 ? `
+    <p>MaxGain charges <b class="text-slate-800">${prem.toFixed(2)}% more</b>. On ${short(s.principal)} that's about <b class="text-slate-800">${short(premCost)} extra a year</b> if you park nothing.</p>
+    <p>Keep at least <b class="text-indigo-700">${short(beSurplus)}</b> parked on average to break even. Anything above that is pure saving.</p>
+    <p class="text-xs">${s.initDep >= beSurplus ? '✅ Your "park now" amount alone clears this.' : '⚠️ Your "park now" amount is below this — monthly parking has to make up the gap.'}</p>`
+    : `<p>MaxGain isn't charging a higher rate here, so any money you park is a straight saving.</p>`;
+
+  const fdPost = s.fdRate * (1 - s.taxSlab / 100);
+  const fdNeeded = s.mgRate / (1 - s.taxSlab / 100);
+  $('fdBox').innerHTML = `
+    <div class="grid grid-cols-2 gap-2">
+      <div class="rounded-lg bg-white ring-1 ring-indigo-100 p-2"><p class="text-[11px] text-slate-500">MaxGain "earns"</p><p class="text-lg font-bold text-indigo-700 num">${s.mgRate.toFixed(2)}%</p><p class="text-[10px] text-slate-500">tax-free (interest not paid)</p></div>
+      <div class="rounded-lg bg-white ring-1 ring-amber-100 p-2"><p class="text-[11px] text-slate-500">FD after tax</p><p class="text-lg font-bold text-amber-700 num">${fdPost.toFixed(2)}%</p><p class="text-[10px] text-slate-500">${s.fdRate}% taxed at ${s.taxSlab}%</p></div>
+    </div>
+    <p>An FD would need <b class="text-slate-800">${fdNeeded.toFixed(2)}%</b> before tax to match. ${
+      s.mgRate > fdPost ? `MaxGain wins by <b class="text-emerald-600">${(s.mgRate - fdPost).toFixed(2)}%</b> a year.`
+      : s.mgRate < fdPost ? `⚠️ The FD earns <b class="text-amber-700">${(fdPost - s.mgRate).toFixed(2)}%</b> a year more after tax — it beats MaxGain.`
+      : 'They come out exactly even.'}</p>`;
+  $('leftNote').innerHTML = mg.leftover > 0
+    ? `When the loan closes, <b class="text-slate-800">${short(mg.leftover)}</b> of your parked money is left over and comes back to you.` : '';
+
+  // Year by year
+  const baseByYr = {}; base.rows.forEach(r => baseByYr[r.yr] = r.int);
+  $('yearRows').innerHTML = mg.rows.map(r => `
+    <tr class="border-t border-slate-100">
+      <td class="py-1.5 pr-2 font-medium">${r.yr}</td>
+      <td class="py-1.5 pr-2 text-right">${short(r.P)}</td>
+      <td class="py-1.5 pr-2 text-right text-emerald-700">${short(r.S)}</td>
+      <td class="py-1.5 pr-2 text-right text-indigo-700">${short(r.int)}</td>
+      <td class="py-1.5 text-right text-slate-500">${short(baseByYr[r.yr] || 0)}</td>
+    </tr>`).join('');
+
+  // Chart
+  const maxM = base.months;
+  const labels = [], bP = [], mP = [], mS = [];
+  for (let m = 0; m <= maxM; m += 3) {
+    labels.push(monthLabel(m));
+    bP.push(base.series[m] ? base.series[m].P : 0);
+    const p = mg.series[Math.min(m, mg.series.length - 1)];
+    mP.push(m <= mg.months ? p.P : null);
+    mS.push(m <= mg.months ? p.S : null);
+  }
+  const data = { labels, datasets: [
+    { label: "Today's loan", data: bP, borderColor: '#94a3b8', borderWidth: 2, pointRadius: 0, tension: .2 },
+    { label: 'MaxGain loan', data: mP, borderColor: '#4f46e5', backgroundColor: 'rgba(79,70,229,.08)', fill: true, borderWidth: 2.5, pointRadius: 0, tension: .2 },
+    { label: 'Money parked', data: mS, borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,.12)', fill: true, borderWidth: 2.5, pointRadius: 0, tension: .2 }
+  ]};
+  if (!window.Chart) return;
+  if (chart) { chart.data = data; chart.update('none'); return; }
+  chart = new Chart($('chart'), {
+    type: 'line', data,
+    options: {
+      responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => c.dataset.label + ': ' + (c.raw == null ? '—' : short(c.raw)) } } },
+      scales: {
+        x: { grid: { display: false }, ticks: { maxTicksLimit: 7, maxRotation: 0, autoSkipPadding: 12, color: '#64748b', font: { size: 10 } } },
+        y: { grid: { color: '#f1f5f9' }, ticks: { maxTicksLimit: 6, color: '#64748b', font: { size: 10 }, callback: v => short(v) } }
+      }
+    }
+  });
+}
+
+$('resetBtn').addEventListener('click', () => {
+  state = { ...DEFAULTS };
+  try { localStorage.removeItem('maxgain-calc'); } catch (e) {}
+  renderFields(); calc();
+});
+document.querySelectorAll('.tabBtn').forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
+document.querySelectorAll('.viewBtn').forEach(b => b.addEventListener('click', () => setView(b.dataset.view)));
+
+window.matchMedia('(min-width: 1024px)').addEventListener('change', () => setTab(ui.tab));
+renderFields(); setView(ui.view); setTab(ui.tab); calc();
+// Tall desktop screens have room for every input — show them all
+if (isDesktop() && window.innerHeight >= 860) $('g_more').closest('details').open = true;
+</script>
+</body>
+</html>
